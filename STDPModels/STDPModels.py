@@ -2,24 +2,24 @@ __author__ = 'wenbo'
 import spynnaker.pyNN as sim
 import pylab
 import scipy.io
-
-sim.setup(timestep=1, min_delay=1, max_delay=10)
+import numpy as np
 cell_params_lif = {
                    'cm': 0.25,
                    'i_offset': 0.0,
-                   'tau_m': 20.0,
-                   'tau_refrac': 2.0,
-                   'tau_syn_E': 5.0,
+                   'tau_m': 10.0,
+                   'tau_refrac': 5.0,
+                   'tau_syn_E': 3.0,
                    'tau_syn_I': 5.0,
                    'v_reset': -70.0,
                    'v_rest': -65.0,
                    'v_thresh': -50.0
 }
 
+sim.setup(timestep=1, min_delay=1, max_delay=144)
 simtime = 200
 synapses_to_spike = 1
 delay = 1
-pretpop_size = 256
+prepop_size = 256
 postpop_size = 20
 dvs_data = scipy.io.loadmat('Data/mat/200ms_16_16_norm_r2l.mat')
 
@@ -28,45 +28,47 @@ ts = (ts - ts[0])/1000 #from ns to ms
 x = dvs_data['X'][0]
 y = dvs_data['Y'][0]
 p = dvs_data['t'][0]
+NeuronId = x*16+y
 
+'''
 loopConnections = list()
 for i in range(0, 5):
     singleConnection = (i, i+1, synapses_to_spike, delay)
     loopConnections.append(singleConnection)
+    '''
 
 def ReadSpikeTime(NeuronID,x,y,ts,p):
     timeTuple=[]
     for idx in range(0,len(x)):
-        if NeuronID == (x[idx]*16+y[idx]):
+        if NeuronID == (x[idx]*16+y[idx]) and p[idx]==0:
            timeTuple.append(ts[idx])
     return timeTuple
 
 def BuildSpike(x,y,ts,p):
-    isfirst = 0
     SpikeTimes = []
-    for i in range(0,pretpop_size):
+    for i in range(0,prepop_size):
         SpikeTimes.append(ReadSpikeTime(i,x,y,ts,p))
     return SpikeTimes
 
 SpikeTimes=BuildSpike(x,y,ts,p)
-print SpikeTimes
 spikeArray = {'spike_times': SpikeTimes}
 #spikeArray = {'spike_times': [[],[1,6,10],[],[],[40,60,80]]}
 
-pre_pop = sim.Population(pretpop_size, sim.SpikeSourceArray, spikeArray, label='inputSpikes_1')
+pre_pop = sim.Population(prepop_size, sim.SpikeSourceArray, spikeArray, label='inputSpikes_1')
 post_pop= sim.Population(postpop_size,sim.IF_curr_exp, cell_params_lif, label='post_1')
 stdp_model = sim.STDPMechanism(
-                timing_dependence=sim.SpikePairRule(tau_plus=10.0, tau_minus=10.0
+                timing_dependence=sim.SpikePairRule(tau_plus=15.0, tau_minus=25.0
                                                   ,nearest=True),
-                weight_dependence=sim.AdditiveWeightDependence(w_min=0, w_max=1,
-                                                               A_plus=0.001, A_minus=0.0012))
-               # weight=pyNN.random.RandomDistribution('normal', mu=0.001, sigma=0.001))
-               # delay=delay,
+                weight_dependence=sim.AdditiveWeightDependence(w_min=0, w_max=0.05,
+                                                               A_plus=0.0001, A_minus=0.00012))
+                #weight=pyNN.random.RandomDistribution('normal', mu=0.001, sigma=0.001))
+
                # dendritic_delay_fraction=0)
+weight_ini = np.random.normal(0.0475, 0.003,prepop_size*postpop_size).tolist()
+connections = sim.Projection(pre_pop, post_pop, sim.AllToAllConnector(weight_ini,delays=2), synapse_dynamics=sim.SynapseDynamics(slow=stdp_model))
 
-connections = sim.Projection(pre_pop, post_pop, sim.AllToAllConnector(weights = synapses_to_spike), synapse_dynamics=sim.SynapseDynamics(slow=stdp_model))
 #connections = p.Projection(pre_pop,post_pop,p.FromListConnector(loopConnections))
-
+#inhibitory between the neurons
 #pre_pop.record('spikes')
 post_pop.record()
 post_pop.record_v()
@@ -91,7 +93,8 @@ def plot_spikes(spikes, title):
         pylab.figure()
         pylab.xlim((0, simtime))
        # pylab.ylim((0, 4))
-        pylab.plot([i[1] for i in spikes], [i[0] for i in spikes], ".")
+        lines = pylab.plot([i[1] for i in spikes], [i[0] for i in spikes],"|")
+        pylab.setp(lines,linewidth=5,color='r')
         pylab.xlabel('Time/ms')
         pylab.ylabel('spikes')
         pylab.title(title)
@@ -113,7 +116,17 @@ if v != None:
           pylab.plot([i[1] for i in v_for_neuron],
                 [i[2] for i in v_for_neuron])
     pylab.show()
+
+#raster plot of the firing time of the neurons
 '''
+pylab.figure()
+pylab.xlabel('Time/ms')
+pylab.ylabel('spikes')
+pylab.title('raster plot of right to left fire neurons')
+pylab.plot(ts,NeuronId, ".")
+pylab.show()
+
+#synapses of the neurons, physical meaning, not the weight?
 if synapses!= None:
     pylab.figure(3)
     ticks = len(synapses)/postpop_size
@@ -124,7 +137,6 @@ if synapses!= None:
          synapses_for_neuron = synapses[ticks*pos:ticks*(pos+1)]
          pylab.plot([i[1] for i in synapses_for_neuron],
                 [i[2] for i in synapses_for_neuron])
-
     pylab.show()
 '''
 print "Weights in the Network are: \n"
