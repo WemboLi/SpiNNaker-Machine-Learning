@@ -3,6 +3,7 @@ import spynnaker.pyNN as sim
 import pylab
 import scipy.io
 import numpy as np
+
 import matplotlib.pyplot as plt
 from pyNN.random import NumpyRNG, RandomDistribution
 cell_params_lif = {
@@ -91,11 +92,10 @@ def BuildTrainingSpike(order,ONOFF):
     return complete_Time
 
 TrianSpikeON = BuildTrainingSpike(order,1)
-TrianSpikeOFF = BuildTrainingSpike(order,0)
+FourDirectionTime = BuildTrainingSpike(order,1)
 #SpikeTimesOn= BuildSpike(x_r,y_r,ts_r,p_r,1)
 #SpikeTimesOFF=BuildSpike(x,y,ts,p,0)
 spikeArrayOn = {'spike_times': TrianSpikeON}
-spikeArrayOff = {'spike_times': TrianSpikeOFF}
 
 ON_pop = sim.Population(prepop_size, sim.SpikeSourceArray, spikeArrayOn, label='inputSpikes_On')
 #OFF_pop = sim.Population(prepop_size, sim.SpikeSourceArray, spikeArrayOff, label='inputSpikes_Off')
@@ -104,18 +104,17 @@ stdp_model = sim.STDPMechanism(
                 timing_dependence=sim.SpikePairRule(tau_plus=15.0, tau_minus=25.0
                                                   ,nearest=True),
                 weight_dependence=sim.AdditiveWeightDependence(w_min=0, w_max=0.5,
-                                                               A_plus=0.01, A_minus=0.01))
+                                                               A_plus=0.012, A_minus=0.01))
                # dendritic_delay_fraction=0)
 weight_ini = np.random.normal(0.108, 0.003,prepop_size*postpop_size).tolist()
 delay_ini = np.random.normal(2, 0.3,prepop_size*postpop_size).tolist()
 
 connectionsOn = sim.Projection(ON_pop, post_pop, sim.AllToAllConnector(weights = weight_ini,delays=2), synapse_dynamics=sim.SynapseDynamics(slow=stdp_model))
+#inhibitory between the neurons
 connection_I  = sim.Projection(post_pop, post_pop, sim.AllToAllConnector(weights = 0.08,delays=1), target='inhibitory')
 
-#inhibitory between the neurons
 #connectionsOFF = sim.Projection(OFF_pop, post_pop, sim.AllToAllConnector(weight_ini,delays=2), synapse_dynamics=sim.SynapseDynamics(slow=stdp_model))
 #connectionsOn = p.Projection(ON_pop,post_pop,p.FromListConnector(loopConnections))
-
 post_pop.record()
 #post_pop.record_v()
 sim.run(simtime)
@@ -128,7 +127,9 @@ synapses =None
 post_spikes = post_pop.getSpikes(compatible_output=True)
 #v = post_pop.get_v(compatible_output=True)
 #synapses = post_pop.get_gsyn(compatible_output=True)
-weights_trained = connectionsOn.getWeights(format='list')
+weights_trained = connectionsOn.getWeights(format='array')
+sim.end()
+
 
 # == Get the Simulation Result of the Data  ==================================
 def plot_spikes(spikes, title):
@@ -141,12 +142,13 @@ def plot_spikes(spikes, title):
         pylab.xlabel('Time/ms')
         pylab.ylabel('Neruons #')
         pylab.title(title)
+        pylab.show()
 
     else:
         print "No spikes received"
 
 plot_spikes(post_spikes, "Spike Pattern of Post-Synaptic Population")
-pylab.show()
+#pylab.show()
 
 #raster plot of the firing time of the neurons
 def raster_plot():
@@ -158,33 +160,58 @@ def raster_plot():
     pylab.title('raster plot of ballmovement(neuron firing pattern)')
     pylab.show()
 #raster_plot()
-'''
 
-if v != None:
-    pylab.figure(2)
-    ticks = len(v)/postpop_size
-    pylab.xlabel('Time/ms')
-    pylab.ylabel('v')
-    pylab.title('v')
-    for pos in range(0,postpop_size,2):
-          v_for_neuron = v[ticks*pos:ticks*(pos+1)]
-          pylab.plot([i[1] for i in v_for_neuron],
-                [i[2] for i in v_for_neuron])
-    pylab.show()
+#post-training processing
+def GetFiringPattern(spike,low,high):
+    spikeT = np.transpose(spike)
+    time_stamp = spikeT[1]
+    target_index = ((time_stamp-low)>=0) & ((time_stamp-high)<0)
+    firingTable = np.unique(spikeT[0][target_index])
+    firingRate = len(np.unique(spikeT[0][target_index]))
+    return firingRate, firingTable
+
+#rate,table = GetFiringPattern(post_spikes,200,400)
+#np.array([np.array([1,2,3]),table])
+
+firing_rate = []
+firing_table=[]
+for jj in range(0,4):
+    rate,table = GetFiringPattern(post_spikes,simtime-200*(jj+1),simtime-200*jj)
+    print table
+    firing_rate.append(rate)
+    firing_table.append(table)
+print "firing rate of each direction:",firing_rate
+    
+scipy.io.savemat('trained weight.mat',{'weight':weights_trained,
+                                       'firing_rate':firing_rate,
+                                       'firing_table':firing_table})
+
+#DirTest = {'spike_times': FourDirectionTime}
+#Test_Pop = sim.Population(prepop_size, sim.SpikeSourceArray, DirTest, label='Test of Training Results')
+#Post_Conn = sim.Projection(Test_Pop, post_pop, sim.AllToAllConnector(weights = weights_trained,delays=2))
+#post_pop.record()
+#pattern_check = np.zeros((postpop_size,),dtype = np.bool)
+#sim.run(800)
+##sim.run(animation_time*4)
+
+#if v != None:
+#    pylab.figure(2)
+#    ticks = len(v)/postpop_size
+#    pylab.xlabel('Time/ms')
+#    pylab.ylabel('v')
+#    pylab.title('v')
+#    for pos in range(0,postpop_size,2):
+#          v_for_neuron = v[ticks*pos:ticks*(pos+1)]
+#          pylab.plot([i[1] for i in v_for_neuron],
+#                [i[2] for i in v_for_neuron])
+#    pylab.show()
 
 
-'''
-print "Weights in the Network are: \n"
 
-#-------------------------------------------------|
-#calculate statistical features of the network    |
-#-------------------------------------------------|
-
+##-------------------------------------------------|
+##calculate statistical features of the network    |
+##-------------------------------------------------|
+#
 #Plot_WeightDistribution(weight_ini,200,'Histogram of Initial Weight')
 #Plot_WeightDistribution(weights_trained,200,'Histogram of Trained Weight')
-
-#print "Average spike times of each neuron:%f "% post_pop.meanSpikeCount(self, gather=True)
-
-
-
 
