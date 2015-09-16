@@ -1,0 +1,1 @@
+In the file STDPModels, python scripts of constructing the network with learning rule STDP(STDPModels.py) and sending moving command to motor (MotorMove.py) are given.
