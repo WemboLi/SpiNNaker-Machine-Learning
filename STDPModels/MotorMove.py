@@ -203,7 +203,7 @@ def CompareFiringPattern(firing_table,timeid):
             if(np.array_equal(firing_table[3-kk][0],temp_table)):
                 MOV = kk
     return MOV
-#plot_spikes(post_spikes, "Spike Pattern of Post-Synaptic Population")
+plot_spikes(post_spikes, "Spike Pattern of Post-Synaptic Population")
 
 #test of the forward movement
 
@@ -229,7 +229,10 @@ def sendMovingCommand(MOV):
         print 'Sent right Move'
 for kk in range(0,4):
     sendMovingCommand(CompareFiringPattern(fire_table,kk))
-    time.sleep(3)
+    time.sleep(2)
+    sock.send("s")
+    time.sleep(1)
+
 
 sock.close()
 
