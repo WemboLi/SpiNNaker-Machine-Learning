@@ -8,6 +8,7 @@ int in3 = 7;
 int in4 = 6;
 int Rx = 12;
 int Tx = 13;
+char rev;
 SoftwareSerial blueToothSerial(Rx, Tx);
 
 
@@ -64,16 +65,26 @@ void rightward()
   digitalWrite(in4, HIGH);
   analogWrite(enB, 175);
 }
+void stop_move()
+
+{
+   analogWrite(enA, 0);
+   analogWrite(enB, 0);
+}
 
 
 void loop()
 {
-  char rev;
+  
   if(blueToothSerial.available())
   {   
       rev = blueToothSerial.read();
       Serial.println(rev);
       blueToothSerial.write(rev);
+      if(rev == 's')
+      {
+        stop_move();
+      }
       if(rev =='b')
       {
         backward();
